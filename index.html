@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asistencia</title>
+</head>
+<body>
+  <h2>Validando tu ubicación...</h2>
+
+  <script>
+    // Coordenadas del aula
+    const latAula = -32.480111;  // cambiar por la real
+    const lonAula = -58.261833;  // cambiar por la real
+    const radio = 50; // metros
+
+    // Función para calcular distancia entre 2 puntos
+    function distancia(lat1, lon1, lat2, lon2) {
+      const R = 6371e3; // radio de la tierra en metros
+      const φ1 = lat1 * Math.PI/180;
+      const φ2 = lat2 * Math.PI/180;
+      const Δφ = (lat2-lat1) * Math.PI/180;
+      const Δλ = (lon2-lon1) * Math.PI/180;
+      const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    // Pedir ubicación al usuario
+    navigator.geolocation.getCurrentPosition(pos => {
+      let d = distancia(latAula, lonAula, pos.coords.latitude, pos.coords.longitude);
+      if (d <= radio) {
+        window.location.href = "https://docs.google.com/forms/d/e/1FAIpQLSf76PEu7vvX2jYN9X5lAJarJXTl8dVRbiUDEK9BKsml4j6EVg/viewform?usp=preview"; // cambiar por el link del Forms
+      } else {
+        document.body.innerHTML = "<h2>No estás en el aula. No podés registrar asistencia.</h2>";
+      }
+    }, err => {
+      document.body.innerHTML = "<h2>No se pudo obtener tu ubicación. Activá GPS y permisos.</h2>";
+    });
+  </script>
+</body>
+</html>
