@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Asistencia</title>
+  <title>Asistencia Aula</title>
 </head>
 <body>
   <h2>Validando tu ubicación...</h2>
@@ -11,12 +11,20 @@
   <script>
     // Coordenadas del aula
     const latAula = -32.480111;
-    const lonAula = -59.023889;  
-    const radio = 5; // metros
+    const lonAula = -59.023889;
+    const radio = 5; // metros de tolerancia
 
-    // Función para calcular distancia entre 2 puntos
+    // Link al Google Form en Base64 (ej: https://forms.gle/XYZ123)
+    const formLinkEncoded = "aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vZm9ybXMvZC9lLzFGQUlwUUxTZjc2UEV1N3Z2WDJqWU45WDVsQUphckpYVGw4ZFZSYmlVREVLOUJLc21sNGo2RVZnL3ZpZXdmb3JtP3VzcD1wcmV2aWV3"; 
+
+    // Función para convertir Base64 a texto
+    function decodeBase64(str) {
+      return atob(str);
+    }
+
+    // Función para calcular distancia entre dos coordenadas
     function distancia(lat1, lon1, lat2, lon2) {
-      const R = 6371e3; // radio de la tierra en metros
+      const R = 6371e3; // metros
       const φ1 = lat1 * Math.PI/180;
       const φ2 = lat2 * Math.PI/180;
       const Δφ = (lat2-lat1) * Math.PI/180;
@@ -25,11 +33,13 @@
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
 
-    // Pedir ubicación al usuario
+    // Pedir ubicación
     navigator.geolocation.getCurrentPosition(pos => {
-      let d = distancia(latAula, lonAula, pos.coords.latitude, pos.coords.longitude);
+      const d = distancia(latAula, lonAula, pos.coords.latitude, pos.coords.longitude);
       if (d <= radio) {
-        window.location.href = "https://docs.google.com/forms/d/e/1FAIpQLSf76PEu7vvX2jYN9X5lAJarJXTl8dVRbiUDEK9BKsml4j6EVg/viewform?usp=preview"; // cambiar por el link del Forms
+        // Desencriptar link y redirigir
+        const formLink = decodeBase64(formLinkEncoded);
+        window.location.href = formLink;
       } else {
         document.body.innerHTML = "<h2>No estás en el aula. No podés registrar asistencia.</h2>";
       }
@@ -39,7 +49,6 @@
   </script>
 </body>
 </html>
-
 
 
 
