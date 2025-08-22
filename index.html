@@ -14,10 +14,9 @@
     const lonAula = -59.023889;
     const radio = 5; // metros de tolerancia
 
-    // Link al Google Form en Base64 
+    // Link a asistencia
     const formLinkEncoded = "aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vZm9ybXMvZC9lLzFGQUlwUUxTZjc2UEV1N3Z2WDJqWU45WDVsQUphckpYVGw4ZFZSYmlVREVLOUJLc21sNGo2RVZnL3ZpZXdmb3JtP3VzcD1wcmV2aWV3"; 
 
-    // Función para convertir Base64 a texto
     function decodeBase64(str) {
       return atob(str);
     }
@@ -37,7 +36,6 @@
     navigator.geolocation.getCurrentPosition(pos => {
       const d = distancia(latAula, lonAula, pos.coords.latitude, pos.coords.longitude);
       if (d <= radio) {
-        // Desencriptar link y redirigir
         const formLink = decodeBase64(formLinkEncoded);
         window.location.href = formLink;
       } else {
@@ -49,6 +47,7 @@
   </script>
 </body>
 </html>
+
 
 
 
