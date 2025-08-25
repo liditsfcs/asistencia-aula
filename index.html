@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Asistencia FCS</title>
+  <title>Asistencia FCS UNER</title>
   <!-- Tailwind CSS para un diseño moderno y responsivo -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Google Fonts para una tipografía más agradable -->
@@ -29,16 +29,15 @@
     // Importar funciones de Firebase v10
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
     import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
-    // ¡NUEVO! Importaciones de Auth actualizadas para el flujo de redirección
     import { 
       getAuth, 
       GoogleAuthProvider, 
-      signInWithRedirect, // Cambiado de signInWithPopup
+      signInWithRedirect,
       signOut, 
       onAuthStateChanged,
-      getRedirectResult, // Para capturar el resultado después de la redirección
-      setPersistence, // Para definir cómo se guarda la sesión
-      browserLocalPersistence // Guardar sesión de forma persistente
+      getRedirectResult,
+      setPersistence,
+      browserLocalPersistence
     } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
 
     // Tu configuración de Firebase
@@ -81,36 +80,29 @@
         logoutButton.addEventListener('click', logout);
         attendanceButton.addEventListener('click', registrarAsistencia);
         
-        // ¡NUEVO! Manejar el flujo de autenticación al cargar la página
-        handleAuthFlow();
+        // Procesa el resultado de la redirección al cargar la página.
+        // La actualización de la interfaz de usuario se manejará en onAuthStateChanged.
+        getRedirectResult(auth)
+          .then((result) => {
+            if (result) {
+              showMessage("¡Login exitoso!");
+            }
+          }).catch((error) => {
+            showMessage(`Error en el login: ${error.message}`, true);
+          });
     });
 
     // --- Lógica de Autenticación ---
 
-    // ¡NUEVO! Esta función maneja la persistencia y el resultado de la redirección
-    const handleAuthFlow = async () => {
-        try {
-            // Establece la persistencia a LOCAL. Esto soluciona el problema en móviles.
-            await setPersistence(auth, browserLocalPersistence);
-            // Comprueba si el usuario viene de una redirección de Google
-            const result = await getRedirectResult(auth);
-            if (result) {
-                // Si es así, el usuario se ha autenticado correctamente.
-                // onAuthStateChanged se encargará de actualizar la UI.
-                showMessage("¡Login exitoso!");
-            }
-        } catch (error) {
-            showMessage("Error durante el proceso de login: " + error.message, true);
-        } finally {
-            // Muestra la tarjeta principal y oculta el spinner después de procesar todo
-            mainCard.classList.remove('hidden');
-            loadingSpinner.classList.add('hidden');
-        }
-    };
-
+    // onAuthStateChanged es ahora la única fuente de verdad para el estado de la UI.
+    // Se ejecuta al cargar la página y después de cualquier cambio de autenticación.
     onAuthStateChanged(auth, user => {
-      // Esta función no cambia, sigue actualizando la UI según el estado del usuario
+      // Como el estado de autenticación ya se conoce, podemos mostrar la app.
+      loadingSpinner.classList.add('hidden');
+      mainCard.classList.remove('hidden');
+
       if (user) {
+        // Usuario logueado: muestra su información y habilita los botones.
         userInfoDiv.innerHTML = `
           <img src="${user.photoURL}" alt="Foto de perfil" class="w-12 h-12 rounded-full mx-auto mb-2 border-2 border-sky-200">
           <p class="font-semibold text-gray-800">${user.displayName}</p>
@@ -122,6 +114,7 @@
         logoutButton.classList.remove('hidden');
         attendanceButton.disabled = false;
       } else {
+        // Usuario no logueado: muestra el botón de login.
         statusDiv.classList.remove('hidden');
         userInfoDiv.classList.add('hidden');
         loginButton.classList.remove('hidden');
@@ -130,12 +123,11 @@
       }
     });
 
-    // ¡MODIFICADO! Ahora usa signInWithRedirect
+    // MODIFICADO: Establece la persistencia justo antes de redirigir.
     const login = async () => {
       try {
+        await setPersistence(auth, browserLocalPersistence);
         await signInWithRedirect(auth, provider);
-        // La página se redirigirá a Google, el resto del código no se ejecutará aquí.
-        // El resultado se procesa en handleAuthFlow cuando el usuario vuelve.
       } catch (e) {
         showMessage("Error al iniciar el login: " + e.message, true);
       }
@@ -269,3 +261,4 @@
 
 </body>
 </html>
+
