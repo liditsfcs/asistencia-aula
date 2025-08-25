@@ -2,18 +2,19 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Asistencia con Firebase</title>
+  <title>Asistencia con Firebase + Google</title>
   <script type="module">
-    // Importar SDKs de Firebase
+    // Importar Firebase
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
     import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
 
-    // 🔑 Configuración de tu proyecto Firebase (copiaste bien esto 👇)
+    // 🔑 Config Firebase (el tuyo)
     const firebaseConfig = {
       apiKey: "AIzaSyCxTeZ8LvP4YMKCV3Ter2n1_Wej0ezYgBQ",
       authDomain: "asistencia-d15e0.firebaseapp.com",
       projectId: "asistencia-d15e0",
-      storageBucket: "asistencia-d15e0.firebasestorage.app",
+      storageBucket: "asistencia-d15e0.appspot.com",
       messagingSenderId: "588035080507",
       appId: "1:588035080507:web:76ff418bb86fccafb0b71e",
       measurementId: "G-7XQHD1MG9G"
@@ -22,13 +23,15 @@
     // Inicializar Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
 
     // Coordenadas del aula
-    const latAula = -32.480251186253234;
-    const lonAula = -58.262129968754465;
+    const latAula = -31.853694;
+    const lonAula = -59.023889;
     const radio = 10; // metros
 
-    // Función distancia
+    // Calcular distancia
     function distancia(lat1, lon1, lat2, lon2) {
       const R = 6371e3;
       const φ1 = lat1 * Math.PI/180;
@@ -39,17 +42,42 @@
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
 
+    // Login con Google
+    window.login = async () => {
+      try {
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
+        document.getElementById("status").innerText = `Hola, ${user.displayName}`;
+        document.getElementById("btnAsistencia").disabled = false;
+      } catch (e) {
+        alert("Error en login: " + e.message);
+      }
+    };
+
+    // Logout
+    window.logout = async () => {
+      await signOut(auth);
+      document.getElementById("status").innerText = "No estás logueado";
+      document.getElementById("btnAsistencia").disabled = true;
+    };
+
     // Registrar asistencia
-    async function registrarAsistencia(nombre) {
+    window.registrarAsistencia = async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        alert("Primero logueate con Google");
+        return;
+      }
+
       navigator.geolocation.getCurrentPosition(async pos => {
         const d = distancia(latAula, lonAula, pos.coords.latitude, pos.coords.longitude);
-
         if (d > radio) {
-          alert("No estás en el aula.");
+          alert("❌ No estás en el aula.");
           return;
         }
 
-        const docRef = doc(db, "asistencias", nombre);
+        const uid = user.uid;
+        const docRef = doc(db, "asistencias", uid);
         const docSnap = await getDoc(docRef);
         const ahora = Date.now();
 
@@ -57,13 +85,15 @@
           const data = docSnap.data();
           if (ahora < data.bloqueadoHasta) {
             const falta = Math.round((data.bloqueadoHasta - ahora)/60000);
-            alert(`Ya registraste asistencia. Podés volver en ${falta} min.`);
+            alert(`⚠️ Ya registraste asistencia. Esperá ${falta} min.`);
             return;
           }
         }
 
         await setDoc(docRef, {
-          nombre: nombre,
+          uid: uid,
+          nombre: user.displayName,
+          email: user.email,
           timestamp: ahora,
           bloqueadoHasta: ahora + 10*60*1000 // 10 min
         });
@@ -72,25 +102,17 @@
       }, err => {
         alert("Error obteniendo ubicación. Activá el GPS.");
       });
-    }
-
-    // Capturar botón
-    window.addEventListener("DOMContentLoaded", () => {
-      document.getElementById("btn").addEventListener("click", () => {
-        const nombre = document.getElementById("nombre").value.trim();
-        if (nombre) registrarAsistencia(nombre);
-        else alert("Ingresá tu nombre y apellido");
-      });
-    });
+    };
   </script>
 </head>
 <body>
   <h2>Registro de Asistencia</h2>
-  <input type="text" id="apellido" placeholder="Apellido">
-  <input type="text" id="nombre" placeholder="Nombre">
-  <button id="btn">Registrar asistencia</button>
+  <p id="status">No estás logueado</p>
+  <button onclick="login()">Login con Google</button>
+  <button onclick="logout()">Logout</button>
+  <hr>
+  <button id="btnAsistencia" onclick="registrarAsistencia()" disabled>Registrar asistencia</button>
 </body>
 </html>
-
 
 
