@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Asistencia FCS UNER</title>
+  <title>Asistencia FCS</title>
   <!-- Tailwind CSS para un diseño moderno y responsivo -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Google Fonts para una tipografía más agradable -->
@@ -29,15 +29,13 @@
     // Importar funciones de Firebase v10
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
     import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+    // ¡VOLVEMOS A signInWithPopup POR SER MÁS FIABLE!
     import { 
       getAuth, 
       GoogleAuthProvider, 
-      signInWithRedirect,
+      signInWithPopup, // Cambiado de signInWithRedirect
       signOut, 
-      onAuthStateChanged,
-      getRedirectResult,
-      setPersistence,
-      browserLocalPersistence
+      onAuthStateChanged
     } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
 
     // Tu configuración de Firebase
@@ -66,44 +64,26 @@
     let loginButton, logoutButton, attendanceButton, statusDiv, messageDiv, userInfoDiv, mainCard, loadingSpinner;
 
     // --- Lógica de Autenticación Principal ---
-    
-    // Función que inicializa toda la lógica de autenticación de forma ordenada.
-    async function initializeAuth() {
-      try {
-        // 1. Asegura que la sesión persista entre redirecciones.
-        await setPersistence(auth, browserLocalPersistence);
-        
-        // 2. Espera a que se procese el resultado de la redirección de Google.
-        // Esto es crucial. El `await` detiene la ejecución aquí hasta que Firebase sepa si hay un login pendiente.
-        const result = await getRedirectResult(auth);
-        
-        // Si `result` no es nulo, significa que el usuario acaba de iniciar sesión.
-        if (result) {
-          showMessage("¡Login exitoso!");
-        }
 
-        // 3. Ahora que el estado inicial está resuelto, configuramos el observador.
-        // Este se encargará de actualizar la UI en tiempo real.
-        onAuthStateChanged(auth, user => {
-          updateUI(user);
-        });
-
-      } catch (error) {
-        console.error("Error en la inicialización de la autenticación:", error);
-        showMessage("Error crítico al iniciar la sesión.", true);
-        // Incluso si hay un error, mostramos la UI en estado de "no conectado".
-        updateUI(null);
-      }
-    }
-
-    // Función dedicada a actualizar la interfaz de usuario.
-    function updateUI(user) {
+    // onAuthStateChanged es la única fuente de verdad para el estado de la UI.
+    // Se ejecuta al cargar la página y después de cualquier cambio de autenticación.
+    onAuthStateChanged(auth, user => {
       // Oculta el spinner y muestra la tarjeta principal, ya que la comprobación ha terminado.
       loadingSpinner.classList.add('hidden');
       mainCard.classList.remove('hidden');
 
       if (user) {
         // Usuario CONECTADO
+        updateUI(user);
+      } else {
+        // Usuario DESCONECTADO
+        updateUI(null);
+      }
+    });
+
+    // Función dedicada a actualizar la interfaz de usuario.
+    function updateUI(user) {
+      if (user) {
         userInfoDiv.innerHTML = `
           <img src="${user.photoURL}" alt="Foto de perfil" class="w-12 h-12 rounded-full mx-auto mb-2 border-2 border-sky-200">
           <p class="font-semibold text-gray-800">${user.displayName}</p>
@@ -115,7 +95,6 @@
         logoutButton.classList.remove('hidden');
         attendanceButton.disabled = false;
       } else {
-        // Usuario DESCONECTADO
         statusDiv.classList.remove('hidden');
         userInfoDiv.classList.add('hidden');
         loginButton.classList.remove('hidden');
@@ -140,15 +119,24 @@
         loginButton.addEventListener('click', login);
         logoutButton.addEventListener('click', logout);
         attendanceButton.addEventListener('click', registrarAsistencia);
-
-        // Iniciamos el proceso de autenticación.
-        initializeAuth();
     });
 
-    const login = () => {
-      signInWithRedirect(auth, provider).catch((e) => {
-        showMessage("Error al iniciar el login: " + e.message, true);
-      });
+    // La función de login ahora usa signInWithPopup.
+    const login = async () => {
+      try {
+        await signInWithPopup(auth, provider);
+        // onAuthStateChanged se encargará de actualizar la UI automáticamente.
+      } catch (error) {
+        // Manejo de errores comunes
+        if (error.code === 'auth/popup-blocked') {
+          showMessage("El navegador bloqueó la ventana emergente. Habilítalas y vuelve a intentarlo.", true);
+        } else if (error.code === 'auth/popup-closed-by-user') {
+          showMessage("Cerraste la ventana de inicio de sesión.", true, false);
+        } else {
+          showMessage("Error en el login: " + error.message, true);
+        }
+        console.error("Error de autenticación:", error);
+      }
     };
 
     const logout = async () => {
