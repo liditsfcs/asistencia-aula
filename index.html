@@ -2,123 +2,254 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Asistencia</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asistencia FCS</title>
+  <!-- Tailwind CSS para un diseño moderno y responsivo -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts para una tipografía más agradable -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Estilo base para la fuente y el color de fondo */
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f0f9ff; /* Un azul cielo muy claro */
+    }
+    /* Estilos para las transiciones y sombras de los botones */
+    .btn {
+      transition: all 0.2s ease-in-out;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+  </style>
   <script type="module">
-    // Importar Firebase
+    // Importar funciones de Firebase v10
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
     import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
 
-    // 🔑 Config Firebase (el tuyo)
-const firebaseConfig = {
-  apiKey: "AIzaSyCxTeZ8LvP4YMKCV3Ter2n1_Wej0ezYgBQ",
-  authDomain: "asistencia-d15e0.firebaseapp.com",
-  projectId: "asistencia-d15e0",
-  storageBucket: "asistencia-d15e0.firebasestorage.app",
-  messagingSenderId: "588035080507",
-  appId: "1:588035080507:web:76ff418bb86fccafb0b71e",
-  measurementId: "G-7XQHD1MG9G"
-};
+    // Tu configuración de Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyCxTeZ8LvP4YMKCV3Ter2n1_Wej0ezYgBQ",
+      authDomain: "asistencia-d15e0.firebaseapp.com",
+      projectId: "asistencia-d15e0",
+      storageBucket: "asistencia-d15e0.firebasestorage.app",
+      messagingSenderId: "588035080507",
+      appId: "1:588035080507:web:76ff418bb86fccafb0b71e",
+      measurementId: "G-7XQHD1MG9G"
+    };
+
     // Inicializar Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
     const provider = new GoogleAuthProvider();
 
-    // Coordenadas del aula
-    const latAula = -32.48024900029567; //32
+    // --- Constantes de la aplicación ---
+    const latAula = -32.48024900029567;
     const lonAula = -58.26212864336707;
-    const radio = 50; // metros
+    const radioPermitido = 25; // Aumentado a 25 metros para dar más margen
 
-    // Calcular distancia
-    function distancia(lat1, lon1, lat2, lon2) {
-      const R = 6371e3;
-      const φ1 = lat1 * Math.PI/180;
-      const φ2 = lat2 * Math.PI/180;
-      const Δφ = (lat2-lat1) * Math.PI/180;
-      const Δλ = (lon2-lon1) * Math.PI/180;
-      const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    }
+    // --- Elementos del DOM ---
+    let loginButton, logoutButton, attendanceButton, statusDiv, messageDiv, userInfoDiv, mainCard, loadingSpinner;
 
-    // Login con Google
-    window.login = async () => {
+    // Se ejecuta cuando el DOM está completamente cargado
+    document.addEventListener('DOMContentLoaded', () => {
+        loginButton = document.getElementById("loginButton");
+        logoutButton = document.getElementById("logoutButton");
+        attendanceButton = document.getElementById("btnAsistencia");
+        statusDiv = document.getElementById("status");
+        messageDiv = document.getElementById("message");
+        userInfoDiv = document.getElementById("userInfo");
+        mainCard = document.getElementById("mainCard");
+        loadingSpinner = document.getElementById('loadingSpinner');
+
+        loginButton.addEventListener('click', login);
+        logoutButton.addEventListener('click', logout);
+        attendanceButton.addEventListener('click', registrarAsistencia);
+    });
+
+
+    // --- Lógica de Autenticación ---
+    onAuthStateChanged(auth, user => {
+      mainCard.classList.remove('hidden'); // Muestra la tarjeta principal una vez que se verifica el estado
+      loadingSpinner.classList.add('hidden'); // Oculta el spinner
+      if (user) {
+        // Usuario logueado
+        userInfoDiv.innerHTML = `
+          <img src="${user.photoURL}" alt="Foto de perfil" class="w-12 h-12 rounded-full mx-auto mb-2 border-2 border-sky-200">
+          <p class="font-semibold text-gray-800">${user.displayName}</p>
+          <p class="text-sm text-gray-500">${user.email}</p>
+        `;
+        statusDiv.classList.add('hidden');
+        userInfoDiv.classList.remove('hidden');
+        loginButton.classList.add('hidden');
+        logoutButton.classList.remove('hidden');
+        attendanceButton.disabled = false;
+      } else {
+        // Usuario no logueado
+        statusDiv.classList.remove('hidden');
+        userInfoDiv.classList.add('hidden');
+        loginButton.classList.remove('hidden');
+        logoutButton.classList.add('hidden');
+        attendanceButton.disabled = true;
+      }
+    });
+
+    const login = async () => {
       try {
-        const result = await signInWithPopup(auth, provider);
-        const user = result.user;
-        document.getElementById("status").innerText = `Hola, ${user.displayName}`;
-        document.getElementById("btnAsistencia").disabled = false;
+        await signInWithPopup(auth, provider);
       } catch (e) {
-        alert("Error en login: " + e.message);
+        showMessage("Error en el login: " + e.message, true);
       }
     };
 
-    // Logout
-    window.logout = async () => {
+    const logout = async () => {
       await signOut(auth);
-      document.getElementById("status").innerText = "No estás logueado";
-      document.getElementById("btnAsistencia").disabled = true;
     };
 
-    // Registrar asistencia
-    window.registrarAsistencia = async () => {
+    // --- Lógica de Asistencia ---
+    const registrarAsistencia = () => {
       const user = auth.currentUser;
       if (!user) {
-        alert("Primero logueate con Google");
+        showMessage("Debes iniciar sesión primero.", true);
         return;
       }
 
+      // Muestra un mensaje de carga
+      showMessage("Obteniendo tu ubicación...", false, true);
+      attendanceButton.disabled = true;
+
       navigator.geolocation.getCurrentPosition(async pos => {
-        const d = distancia(latAula, lonAula, pos.coords.latitude, pos.coords.longitude);
-        if (d > radio) {
-          alert("❌ No estás en el aula.");
+        const d = calcularDistancia(latAula, lonAula, pos.coords.latitude, pos.coords.longitude);
+        
+        if (d > radioPermitido) {
+          showMessage(`❌ No estás en el aula. Distancia: ${d.toFixed(0)} metros.`, true);
+          attendanceButton.disabled = false;
           return;
         }
 
         const uid = user.uid;
         const docRef = doc(db, "asistencias", uid);
-        const docSnap = await getDoc(docRef);
-        const ahora = Date.now();
+        const ahora = new Date(); // Usamos el objeto Date directamente
 
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          if (ahora < data.bloqueadoHasta) {
-            const falta = Math.round((data.bloqueadoHasta - ahora)/60000);
-            alert(`⚠️ Ya registraste asistencia. Esperá ${falta} min.`);
-            return;
-          }
+        try {
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              if (ahora.getTime() < data.bloqueadoHasta) {
+                const falta = Math.round((data.bloqueadoHasta - ahora.getTime()) / 60000);
+                showMessage(`⚠️ Ya registraste. Espera ${falta} min.`, true);
+                attendanceButton.disabled = false;
+                return;
+              }
+            }
+
+            // Guardamos los datos en Firestore
+            await setDoc(docRef, {
+              uid: uid,
+              nombre: user.displayName,
+              email: user.email,
+              timestamp: ahora.getTime(),
+              // ¡NUEVO! Guardamos la fecha y hora en formato legible
+              fechaHora: ahora.toLocaleString('es-AR', { dateStyle: 'medium', timeStyle: 'short' }),
+              bloqueadoHasta: ahora.getTime() + 10 * 60 * 1000 // Bloqueo de 10 min
+            });
+
+            showMessage("✅ ¡Asistencia registrada correctamente!");
+            attendanceButton.disabled = false;
+
+        } catch (error) {
+            showMessage("Error al guardar en la base de datos.", true);
+            console.error("Error writing document: ", error);
+            attendanceButton.disabled = false;
         }
 
-        await setDoc(docRef, {
-          uid: uid,
-          nombre: user.displayName,
-          email: user.email,
-          timestamp: ahora,
-          bloqueadoHasta: ahora + 10*60*1000 // 10 min
-        });
-
-        alert("✅ Asistencia registrada correctamente");
       }, err => {
-        alert("Error obteniendo ubicación. Activá el GPS.");
-      });
+        showMessage("Error de GPS. Asegúrate de activarlo y dar permisos.", true);
+        attendanceButton.disabled = false;
+      }, { enableHighAccuracy: true }); // Pide la máxima precisión posible
     };
+
+    // --- Funciones de Utilidad ---
+
+    // Muestra un mensaje en pantalla (reemplaza a alert)
+    function showMessage(msg, isError = false, isPersistent = false) {
+      messageDiv.textContent = msg;
+      messageDiv.className = 'p-3 rounded-md text-sm text-center font-medium'; // Clases base
+      if (isError) {
+        messageDiv.classList.add('bg-red-100', 'text-red-800');
+      } else {
+        messageDiv.classList.add('bg-green-100', 'text-green-800');
+      }
+      messageDiv.classList.remove('hidden');
+
+      if (!isPersistent) {
+        setTimeout(() => {
+          messageDiv.classList.add('hidden');
+        }, 5000); // El mensaje desaparece después de 5 segundos
+      }
+    }
+
+    // Calcula la distancia entre dos puntos geográficos (fórmula de Haversine)
+    function calcularDistancia(lat1, lon1, lat2, lon2) {
+      const R = 6371e3; // Radio de la Tierra en metros
+      const phi1 = lat1 * Math.PI / 180;
+      const phi2 = lat2 * Math.PI / 180;
+      const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+      const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(deltaPhi / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c; // Distancia en metros
+    }
   </script>
 </head>
-<body>
-  <h2>Registro de Asistencia</h2>
-  <p id="status">No estás logueado</p>
-  <button onclick="login()">Login con Google</button>
-  <button onclick="logout()">Logout</button>
-  <hr>
-  <button id="btnAsistencia" onclick="registrarAsistencia()" disabled>Registrar asistencia</button>
+<body class="flex items-center justify-center min-h-screen">
+
+  <!-- Spinner de carga inicial -->
+  <div id="loadingSpinner" class="text-center">
+    <svg class="animate-spin h-10 w-10 text-sky-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+    <p class="mt-2 text-gray-600">Cargando...</p>
+  </div>
+
+  <!-- Tarjeta principal de la aplicación -->
+  <div id="mainCard" class="w-full max-w-sm mx-auto bg-white rounded-2xl shadow-xl p-8 text-center hidden">
+    
+    <!-- Logo -->
+    <img src="https://i.imgur.com/gA262zT.jpeg" alt="Logo FCS" class="w-24 h-24 mx-auto mb-4 rounded-full">
+    
+    <h1 class="text-2xl font-bold text-gray-800 mb-2">Registro de Asistencia</h1>
+    <p class="text-gray-500 mb-6">Facultad de Ciencias de la Salud</p>
+    
+    <!-- Contenedor para mensajes -->
+    <div id="message" class="hidden mb-4"></div>
+
+    <!-- Información del usuario o estado de login -->
+    <div id="status" class="mb-6 text-gray-600">Inicia sesión para continuar</div>
+    <div id="userInfo" class="hidden mb-6"></div>
+    
+    <!-- Botones de acción -->
+    <div class="space-y-3">
+      <button id="loginButton" class="btn w-full bg-sky-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-sky-700">
+        Login con Google
+      </button>
+
+      <button id="btnAsistencia" class="btn w-full bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-emerald-600 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:shadow-none disabled:transform-none" disabled>
+        Registrar mi asistencia
+      </button>
+
+      <button id="logoutButton" class="btn hidden w-full bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 text-sm">
+        Cerrar Sesión
+      </button>
+    </div>
+  </div>
+
 </body>
 </html>
-
-
-
-
-
-
-
-
-
