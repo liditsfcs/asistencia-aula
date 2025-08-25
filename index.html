@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Asistencia FCS</title>
+  <title>Asistencia FCS UNER</title>
   <!-- Tailwind CSS para un diseño moderno y responsivo -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Google Fonts para una tipografía más agradable -->
@@ -65,30 +65,45 @@
     // --- Elementos del DOM ---
     let loginButton, logoutButton, attendanceButton, statusDiv, messageDiv, userInfoDiv, mainCard, loadingSpinner;
 
-    // --- Lógica de Autenticación ---
+    // --- Lógica de Autenticación Principal ---
+    
+    // Función que inicializa toda la lógica de autenticación de forma ordenada.
+    async function initializeAuth() {
+      try {
+        // 1. Asegura que la sesión persista entre redirecciones.
+        await setPersistence(auth, browserLocalPersistence);
+        
+        // 2. Espera a que se procese el resultado de la redirección de Google.
+        // Esto es crucial. El `await` detiene la ejecución aquí hasta que Firebase sepa si hay un login pendiente.
+        const result = await getRedirectResult(auth);
+        
+        // Si `result` no es nulo, significa que el usuario acaba de iniciar sesión.
+        if (result) {
+          showMessage("¡Login exitoso!");
+        }
 
-    // ¡¡¡CORRECCIÓN CLAVE!!!
-    // Se establece la persistencia a "local" inmediatamente. Esto asegura que la sesión
-    // sobreviva a la redirección de la página, que es la causa del problema.
-    setPersistence(auth, browserLocalPersistence)
-      .then(() => {
-        // Una vez que la persistencia está asegurada, procesamos el posible resultado
-        // de una redirección de inicio de sesión.
-        getRedirectResult(auth).catch((error) => {
-          showMessage(`Error en el login: ${error.message}`, true);
+        // 3. Ahora que el estado inicial está resuelto, configuramos el observador.
+        // Este se encargará de actualizar la UI en tiempo real.
+        onAuthStateChanged(auth, user => {
+          updateUI(user);
         });
-      })
-      .catch((error) => {
-        console.error("Error al configurar la persistencia:", error);
-        showMessage("Error de configuración. No se pudo iniciar sesión.", true);
-      });
 
-    // onAuthStateChanged sigue siendo la única fuente de verdad para el estado de la UI.
-    onAuthStateChanged(auth, user => {
+      } catch (error) {
+        console.error("Error en la inicialización de la autenticación:", error);
+        showMessage("Error crítico al iniciar la sesión.", true);
+        // Incluso si hay un error, mostramos la UI en estado de "no conectado".
+        updateUI(null);
+      }
+    }
+
+    // Función dedicada a actualizar la interfaz de usuario.
+    function updateUI(user) {
+      // Oculta el spinner y muestra la tarjeta principal, ya que la comprobación ha terminado.
       loadingSpinner.classList.add('hidden');
       mainCard.classList.remove('hidden');
 
       if (user) {
+        // Usuario CONECTADO
         userInfoDiv.innerHTML = `
           <img src="${user.photoURL}" alt="Foto de perfil" class="w-12 h-12 rounded-full mx-auto mb-2 border-2 border-sky-200">
           <p class="font-semibold text-gray-800">${user.displayName}</p>
@@ -100,16 +115,18 @@
         logoutButton.classList.remove('hidden');
         attendanceButton.disabled = false;
       } else {
+        // Usuario DESCONECTADO
         statusDiv.classList.remove('hidden');
         userInfoDiv.classList.add('hidden');
         loginButton.classList.remove('hidden');
         logoutButton.classList.add('hidden');
         attendanceButton.disabled = true;
       }
-    });
+    }
 
     // Se ejecuta cuando el DOM está completamente cargado
     document.addEventListener('DOMContentLoaded', () => {
+        // Obtenemos las referencias a los elementos del DOM.
         loginButton = document.getElementById("loginButton");
         logoutButton = document.getElementById("logoutButton");
         attendanceButton = document.getElementById("btnAsistencia");
@@ -119,12 +136,15 @@
         mainCard = document.getElementById("mainCard");
         loadingSpinner = document.getElementById('loadingSpinner');
 
+        // Asignamos los eventos a los botones.
         loginButton.addEventListener('click', login);
         logoutButton.addEventListener('click', logout);
         attendanceButton.addEventListener('click', registrarAsistencia);
+
+        // Iniciamos el proceso de autenticación.
+        initializeAuth();
     });
 
-    // La función de login ahora es más simple, ya no necesita `setPersistence`.
     const login = () => {
       signInWithRedirect(auth, provider).catch((e) => {
         showMessage("Error al iniciar el login: " + e.message, true);
