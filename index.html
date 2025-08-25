@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Asistencia FCS UNER</title>
+  <title>Asistencia FCS</title>
   <!-- Tailwind CSS para un diseño moderno y responsivo -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Google Fonts para una tipografía más agradable -->
@@ -65,6 +65,49 @@
     // --- Elementos del DOM ---
     let loginButton, logoutButton, attendanceButton, statusDiv, messageDiv, userInfoDiv, mainCard, loadingSpinner;
 
+    // --- Lógica de Autenticación ---
+
+    // ¡¡¡CORRECCIÓN CLAVE!!!
+    // Se establece la persistencia a "local" inmediatamente. Esto asegura que la sesión
+    // sobreviva a la redirección de la página, que es la causa del problema.
+    setPersistence(auth, browserLocalPersistence)
+      .then(() => {
+        // Una vez que la persistencia está asegurada, procesamos el posible resultado
+        // de una redirección de inicio de sesión.
+        getRedirectResult(auth).catch((error) => {
+          showMessage(`Error en el login: ${error.message}`, true);
+        });
+      })
+      .catch((error) => {
+        console.error("Error al configurar la persistencia:", error);
+        showMessage("Error de configuración. No se pudo iniciar sesión.", true);
+      });
+
+    // onAuthStateChanged sigue siendo la única fuente de verdad para el estado de la UI.
+    onAuthStateChanged(auth, user => {
+      loadingSpinner.classList.add('hidden');
+      mainCard.classList.remove('hidden');
+
+      if (user) {
+        userInfoDiv.innerHTML = `
+          <img src="${user.photoURL}" alt="Foto de perfil" class="w-12 h-12 rounded-full mx-auto mb-2 border-2 border-sky-200">
+          <p class="font-semibold text-gray-800">${user.displayName}</p>
+          <p class="text-sm text-gray-500">${user.email}</p>
+        `;
+        statusDiv.classList.add('hidden');
+        userInfoDiv.classList.remove('hidden');
+        loginButton.classList.add('hidden');
+        logoutButton.classList.remove('hidden');
+        attendanceButton.disabled = false;
+      } else {
+        statusDiv.classList.remove('hidden');
+        userInfoDiv.classList.add('hidden');
+        loginButton.classList.remove('hidden');
+        logoutButton.classList.add('hidden');
+        attendanceButton.disabled = true;
+      }
+    });
+
     // Se ejecuta cuando el DOM está completamente cargado
     document.addEventListener('DOMContentLoaded', () => {
         loginButton = document.getElementById("loginButton");
@@ -79,58 +122,13 @@
         loginButton.addEventListener('click', login);
         logoutButton.addEventListener('click', logout);
         attendanceButton.addEventListener('click', registrarAsistencia);
-        
-        // Procesa el resultado de la redirección al cargar la página.
-        // La actualización de la interfaz de usuario se manejará en onAuthStateChanged.
-        getRedirectResult(auth)
-          .then((result) => {
-            if (result) {
-              showMessage("¡Login exitoso!");
-            }
-          }).catch((error) => {
-            showMessage(`Error en el login: ${error.message}`, true);
-          });
     });
 
-    // --- Lógica de Autenticación ---
-
-    // onAuthStateChanged es ahora la única fuente de verdad para el estado de la UI.
-    // Se ejecuta al cargar la página y después de cualquier cambio de autenticación.
-    onAuthStateChanged(auth, user => {
-      // Como el estado de autenticación ya se conoce, podemos mostrar la app.
-      loadingSpinner.classList.add('hidden');
-      mainCard.classList.remove('hidden');
-
-      if (user) {
-        // Usuario logueado: muestra su información y habilita los botones.
-        userInfoDiv.innerHTML = `
-          <img src="${user.photoURL}" alt="Foto de perfil" class="w-12 h-12 rounded-full mx-auto mb-2 border-2 border-sky-200">
-          <p class="font-semibold text-gray-800">${user.displayName}</p>
-          <p class="text-sm text-gray-500">${user.email}</p>
-        `;
-        statusDiv.classList.add('hidden');
-        userInfoDiv.classList.remove('hidden');
-        loginButton.classList.add('hidden');
-        logoutButton.classList.remove('hidden');
-        attendanceButton.disabled = false;
-      } else {
-        // Usuario no logueado: muestra el botón de login.
-        statusDiv.classList.remove('hidden');
-        userInfoDiv.classList.add('hidden');
-        loginButton.classList.remove('hidden');
-        logoutButton.classList.add('hidden');
-        attendanceButton.disabled = true;
-      }
-    });
-
-    // MODIFICADO: Establece la persistencia justo antes de redirigir.
-    const login = async () => {
-      try {
-        await setPersistence(auth, browserLocalPersistence);
-        await signInWithRedirect(auth, provider);
-      } catch (e) {
+    // La función de login ahora es más simple, ya no necesita `setPersistence`.
+    const login = () => {
+      signInWithRedirect(auth, provider).catch((e) => {
         showMessage("Error al iniciar el login: " + e.message, true);
-      }
+      });
     };
 
     const logout = async () => {
@@ -190,6 +188,7 @@
 
     // --- Funciones de Utilidad (sin cambios) ---
     function showMessage(msg, isError = false, isPersistent = false) {
+      if (!messageDiv) return; // Previene errores si el DOM no está listo
       messageDiv.textContent = msg;
       messageDiv.className = 'p-3 rounded-md text-sm text-center font-medium';
       if (isError) {
@@ -261,4 +260,3 @@
 
 </body>
 </html>
-
