@@ -2,28 +2,35 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Asistencia</title>
-</head>
-<body>
-  <h2>Validando tu ubicación...</h2>
+  <title>Asistencia con Firebase</title>
+  <script type="module">
+    // Importar SDKs de Firebase
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
 
-  <script>
+    // 🔑 Configuración de tu proyecto Firebase (copiaste bien esto 👇)
+    const firebaseConfig = {
+      apiKey: "AIzaSyCxTeZ8LvP4YMKCV3Ter2n1_Wej0ezYgBQ",
+      authDomain: "asistencia-d15e0.firebaseapp.com",
+      projectId: "asistencia-d15e0",
+      storageBucket: "asistencia-d15e0.firebasestorage.app",
+      messagingSenderId: "588035080507",
+      appId: "1:588035080507:web:76ff418bb86fccafb0b71e",
+      measurementId: "G-7XQHD1MG9G"
+    };
+
+    // Inicializar Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
     // Coordenadas del aula
     const latAula = -31.853694;
     const lonAula = -59.023889;
-    const radio = 10; // metros de tolerancia
+    const radio = 10; // metros
 
-    // Link a asistencia
-    const formLinkEncoded = "aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vZm9ybXMvZC9lLzFGQUlwUUxTZjc2UEV1N3Z2WDJqWU45WDVsQUphckpYVGw4ZFZSYmlVREVLOUJLc21sNGo2RVZnL3ZpZXdmb3JtP3VzcD1wcmV2aWV3"; 
-
-    function decodeBase64(str) {
-      return atob(str);
-    }
-
-    // Función para calcular distancia entre dos coordenadas
+    // Función distancia
     function distancia(lat1, lon1, lat2, lon2) {
-      const R = 6371e3; // metros
+      const R = 6371e3;
       const φ1 = lat1 * Math.PI/180;
       const φ2 = lat2 * Math.PI/180;
       const Δφ = (lat2-lat1) * Math.PI/180;
@@ -32,35 +39,54 @@
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
 
-    // Pedir ubicación
-    navigator.geolocation.getCurrentPosition(pos => {
-      const d = distancia(latAula, lonAula, pos.coords.latitude, pos.coords.longitude);
-      if (d <= radio) {
-        const formLink = decodeBase64(formLinkEncoded);
-        window.location.href = formLink;
-      } else {
-        document.body.innerHTML = "<h2>No estás en el aula. No podés registrar asistencia.</h2>";
-      }
-    }, err => {
-      document.body.innerHTML = "<h2>No se pudo obtener tu ubicación. Activá GPS y permisos.</h2>";
+    // Registrar asistencia
+    async function registrarAsistencia(nombre) {
+      navigator.geolocation.getCurrentPosition(async pos => {
+        const d = distancia(latAula, lonAula, pos.coords.latitude, pos.coords.longitude);
+
+        if (d > radio) {
+          alert("No estás en el aula.");
+          return;
+        }
+
+        const docRef = doc(db, "asistencias", nombre);
+        const docSnap = await getDoc(docRef);
+        const ahora = Date.now();
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (ahora < data.bloqueadoHasta) {
+            const falta = Math.round((data.bloqueadoHasta - ahora)/60000);
+            alert(`Ya registraste asistencia. Podés volver en ${falta} min.`);
+            return;
+          }
+        }
+
+        await setDoc(docRef, {
+          nombre: nombre,
+          timestamp: ahora,
+          bloqueadoHasta: ahora + 10*60*1000 // 10 min
+        });
+
+        alert("✅ Asistencia registrada correctamente");
+      }, err => {
+        alert("Error obteniendo ubicación. Activá el GPS.");
+      });
+    }
+
+    // Capturar botón
+    window.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("btn").addEventListener("click", () => {
+        const nombre = document.getElementById("nombre").value.trim();
+        if (nombre) registrarAsistencia(nombre);
+        else alert("Ingresá tu nombre y apellido");
+      });
     });
   </script>
+</head>
+<body>
+  <h2>Registro de Asistencia</h2>
+  <input type="text" id="nombre" placeholder="Nombre y apellido">
+  <button id="btn">Registrar asistencia</button>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
