@@ -10,16 +10,15 @@
     import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
 
     // 🔑 Config Firebase (el tuyo)
-    const firebaseConfig = {
-      apiKey: "AIzaSyCxTeZ8LvP4YMKCV3Ter2n1_Wej0ezYgBQ",
-      authDomain: "asistencia-d15e0.firebaseapp.com",
-      projectId: "asistencia-d15e0",
-      storageBucket: "asistencia-d15e0.appspot.com",
-      messagingSenderId: "588035080507",
-      appId: "1:588035080507:web:76ff418bb86fccafb0b71e",
-      measurementId: "G-7XQHD1MG9G"
-    };
-
+const firebaseConfig = {
+  apiKey: "AIzaSyCxTeZ8LvP4YMKCV3Ter2n1_Wej0ezYgBQ",
+  authDomain: "asistencia-d15e0.firebaseapp.com",
+  projectId: "asistencia-d15e0",
+  storageBucket: "asistencia-d15e0.firebasestorage.app",
+  messagingSenderId: "588035080507",
+  appId: "1:588035080507:web:76ff418bb86fccafb0b71e",
+  measurementId: "G-7XQHD1MG9G"
+};
     // Inicializar Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
@@ -114,6 +113,7 @@
   <button id="btnAsistencia" onclick="registrarAsistencia()" disabled>Registrar asistencia</button>
 </body>
 </html>
+
 
 
 
