@@ -20,7 +20,7 @@
     .btn {
       transition: all 0.2s ease-in-out;
     }
-    .btn:hover {
+    .btn:hover:not(:disabled) {
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
@@ -29,7 +29,17 @@
     // Importar funciones de Firebase v10
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
     import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+    // ¡NUEVO! Importaciones de Auth actualizadas para el flujo de redirección
+    import { 
+      getAuth, 
+      GoogleAuthProvider, 
+      signInWithRedirect, // Cambiado de signInWithPopup
+      signOut, 
+      onAuthStateChanged,
+      getRedirectResult, // Para capturar el resultado después de la redirección
+      setPersistence, // Para definir cómo se guarda la sesión
+      browserLocalPersistence // Guardar sesión de forma persistente
+    } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
 
     // Tu configuración de Firebase
     const firebaseConfig = {
@@ -51,7 +61,7 @@
     // --- Constantes de la aplicación ---
     const latAula = -32.48024900029567;
     const lonAula = -58.26212864336707;
-    const radioPermitido = 25; // Aumentado a 25 metros para dar más margen
+    const radioPermitido = 25;
 
     // --- Elementos del DOM ---
     let loginButton, logoutButton, attendanceButton, statusDiv, messageDiv, userInfoDiv, mainCard, loadingSpinner;
@@ -70,15 +80,37 @@
         loginButton.addEventListener('click', login);
         logoutButton.addEventListener('click', logout);
         attendanceButton.addEventListener('click', registrarAsistencia);
+        
+        // ¡NUEVO! Manejar el flujo de autenticación al cargar la página
+        handleAuthFlow();
     });
 
-
     // --- Lógica de Autenticación ---
+
+    // ¡NUEVO! Esta función maneja la persistencia y el resultado de la redirección
+    const handleAuthFlow = async () => {
+        try {
+            // Establece la persistencia a LOCAL. Esto soluciona el problema en móviles.
+            await setPersistence(auth, browserLocalPersistence);
+            // Comprueba si el usuario viene de una redirección de Google
+            const result = await getRedirectResult(auth);
+            if (result) {
+                // Si es así, el usuario se ha autenticado correctamente.
+                // onAuthStateChanged se encargará de actualizar la UI.
+                showMessage("¡Login exitoso!");
+            }
+        } catch (error) {
+            showMessage("Error durante el proceso de login: " + error.message, true);
+        } finally {
+            // Muestra la tarjeta principal y oculta el spinner después de procesar todo
+            mainCard.classList.remove('hidden');
+            loadingSpinner.classList.add('hidden');
+        }
+    };
+
     onAuthStateChanged(auth, user => {
-      mainCard.classList.remove('hidden'); // Muestra la tarjeta principal una vez que se verifica el estado
-      loadingSpinner.classList.add('hidden'); // Oculta el spinner
+      // Esta función no cambia, sigue actualizando la UI según el estado del usuario
       if (user) {
-        // Usuario logueado
         userInfoDiv.innerHTML = `
           <img src="${user.photoURL}" alt="Foto de perfil" class="w-12 h-12 rounded-full mx-auto mb-2 border-2 border-sky-200">
           <p class="font-semibold text-gray-800">${user.displayName}</p>
@@ -90,7 +122,6 @@
         logoutButton.classList.remove('hidden');
         attendanceButton.disabled = false;
       } else {
-        // Usuario no logueado
         statusDiv.classList.remove('hidden');
         userInfoDiv.classList.add('hidden');
         loginButton.classList.remove('hidden');
@@ -99,11 +130,14 @@
       }
     });
 
+    // ¡MODIFICADO! Ahora usa signInWithRedirect
     const login = async () => {
       try {
-        await signInWithPopup(auth, provider);
+        await signInWithRedirect(auth, provider);
+        // La página se redirigirá a Google, el resto del código no se ejecutará aquí.
+        // El resultado se procesa en handleAuthFlow cuando el usuario vuelve.
       } catch (e) {
-        showMessage("Error en el login: " + e.message, true);
+        showMessage("Error al iniciar el login: " + e.message, true);
       }
     };
 
@@ -111,34 +145,27 @@
       await signOut(auth);
     };
 
-    // --- Lógica de Asistencia ---
+    // --- Lógica de Asistencia (sin cambios) ---
     const registrarAsistencia = () => {
       const user = auth.currentUser;
       if (!user) {
         showMessage("Debes iniciar sesión primero.", true);
         return;
       }
-
-      // Muestra un mensaje de carga
       showMessage("Obteniendo tu ubicación...", false, true);
       attendanceButton.disabled = true;
-
       navigator.geolocation.getCurrentPosition(async pos => {
         const d = calcularDistancia(latAula, lonAula, pos.coords.latitude, pos.coords.longitude);
-        
         if (d > radioPermitido) {
           showMessage(`❌ No estás en el aula. Distancia: ${d.toFixed(0)} metros.`, true);
           attendanceButton.disabled = false;
           return;
         }
-
         const uid = user.uid;
         const docRef = doc(db, "asistencias", uid);
-        const ahora = new Date(); // Usamos el objeto Date directamente
-
+        const ahora = new Date();
         try {
             const docSnap = await getDoc(docRef);
-
             if (docSnap.exists()) {
               const data = docSnap.data();
               if (ahora.getTime() < data.bloqueadoHasta) {
@@ -148,63 +175,52 @@
                 return;
               }
             }
-
-            // Guardamos los datos en Firestore
             await setDoc(docRef, {
               uid: uid,
               nombre: user.displayName,
               email: user.email,
               timestamp: ahora.getTime(),
-              // ¡NUEVO! Guardamos la fecha y hora en formato legible
               fechaHora: ahora.toLocaleString('es-AR', { dateStyle: 'medium', timeStyle: 'short' }),
-              bloqueadoHasta: ahora.getTime() + 10 * 60 * 1000 // Bloqueo de 10 min
+              bloqueadoHasta: ahora.getTime() + 10 * 60 * 1000
             });
-
             showMessage("✅ ¡Asistencia registrada correctamente!");
             attendanceButton.disabled = false;
-
         } catch (error) {
             showMessage("Error al guardar en la base de datos.", true);
             console.error("Error writing document: ", error);
             attendanceButton.disabled = false;
         }
-
       }, err => {
         showMessage("Error de GPS. Asegúrate de activarlo y dar permisos.", true);
         attendanceButton.disabled = false;
-      }, { enableHighAccuracy: true }); // Pide la máxima precisión posible
+      }, { enableHighAccuracy: true });
     };
 
-    // --- Funciones de Utilidad ---
-
-    // Muestra un mensaje en pantalla (reemplaza a alert)
+    // --- Funciones de Utilidad (sin cambios) ---
     function showMessage(msg, isError = false, isPersistent = false) {
       messageDiv.textContent = msg;
-      messageDiv.className = 'p-3 rounded-md text-sm text-center font-medium'; // Clases base
+      messageDiv.className = 'p-3 rounded-md text-sm text-center font-medium';
       if (isError) {
         messageDiv.classList.add('bg-red-100', 'text-red-800');
       } else {
         messageDiv.classList.add('bg-green-100', 'text-green-800');
       }
       messageDiv.classList.remove('hidden');
-
       if (!isPersistent) {
         setTimeout(() => {
           messageDiv.classList.add('hidden');
-        }, 5000); // El mensaje desaparece después de 5 segundos
+        }, 5000);
       }
     }
-
-    // Calcula la distancia entre dos puntos geográficos (fórmula de Haversine)
     function calcularDistancia(lat1, lon1, lat2, lon2) {
-      const R = 6371e3; // Radio de la Tierra en metros
+      const R = 6371e3;
       const phi1 = lat1 * Math.PI / 180;
       const phi2 = lat2 * Math.PI / 180;
       const deltaPhi = (lat2 - lat1) * Math.PI / 180;
       const deltaLambda = (lon2 - lon1) * Math.PI / 180;
       const a = Math.sin(deltaPhi / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) ** 2;
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c; // Distancia en metros
+      return R * c;
     }
   </script>
 </head>
@@ -253,4 +269,3 @@
 
 </body>
 </html>
-
