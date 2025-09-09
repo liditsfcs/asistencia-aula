@@ -170,7 +170,7 @@
               const data = docSnap.data();
               if (ahora.getTime() < data.bloqueadoHasta) {
                 const falta = Math.round((data.bloqueadoHasta - ahora.getTime()) / 60000);
-                showMessage(`⚠️ Ya registraste. Espera ${falta} min.`, true);
+                showMessage(`⚠️ Ya registraste tu asistencia. Espera ${falta} min.`, true);
                 attendanceButton.disabled = false;
                 return;
               }
@@ -270,6 +270,7 @@
 
 </body>
 </html>
+
 
 
 
